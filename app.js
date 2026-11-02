@@ -68,4 +68,37 @@
       if (bounds.bottom > bottom || bounds.top < header.getBoundingClientRect().bottom) event.target.scrollIntoView({ block: 'center' });
     });
   });
+  // Progressive motion: content remains visible if animation APIs are unavailable.
+  const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+  const motionTargets = [...document.querySelectorAll(
+    '.section-heading, .about-body > p, .price-main, .system-details > div, .system-action, .section-top > .section-intro, .space-grid > figure, .visit-steps > li, .faq-list > details, .access-grid > div, .access-map, .contact .container > *, .footer-inner'
+  )];
+  const activeAnimations = new Set();
+  let revealObserver;
+  const finishMotion = () => {
+    revealObserver?.disconnect();
+    activeAnimations.forEach(animation => animation.finish());
+    activeAnimations.clear();
+  };
+  if (!reducedMotion.matches && 'IntersectionObserver' in window && Element.prototype.animate) {
+    revealObserver = new IntersectionObserver(entries => {
+      entries.forEach(entry => {
+        if (!entry.isIntersecting) return;
+        const element = entry.target;
+        revealObserver.unobserve(element);
+        const siblings = [...element.parentElement.children];
+        const delay = Math.min(siblings.indexOf(element) * 65, 195);
+        const animation = element.animate([
+          { opacity: 0, transform: 'translateY(24px)' },
+          { opacity: 1, transform: 'translateY(0)' }
+        ], { duration: 950, delay, easing: 'cubic-bezier(.22,1,.36,1)', fill: 'backwards' });
+        activeAnimations.add(animation);
+        animation.finished.then(() => activeAnimations.delete(animation)).catch(() => {});
+      });
+    }, { threshold: 0, rootMargin: '0px 0px -36px 0px' });
+    motionTargets.forEach(element => revealObserver.observe(element));
+  }
+  reducedMotion.addEventListener('change', event => { if (event.matches) finishMotion(); });
+  // Keyboard navigation reveals focused controls immediately.
+  document.addEventListener('focusin', finishMotion);
 })();
